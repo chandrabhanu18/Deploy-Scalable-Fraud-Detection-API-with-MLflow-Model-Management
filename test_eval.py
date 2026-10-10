@@ -10,6 +10,9 @@ def evaluate():
     print("  FRAUD DETECTION API & MLOps PIPELINE - COMPREHENSIVE EVALUATION")
     print("=" * 70)
 
+
+    
+
     # 1. Root Endpoint
     print("\n[TEST 1] Root Endpoint (GET /)")
     r = requests.get(f"{BASE_URL}/")

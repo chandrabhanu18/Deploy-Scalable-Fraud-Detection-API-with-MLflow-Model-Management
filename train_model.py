@@ -159,6 +159,7 @@ def train_and_register(
                 registered_model_name=registered_model_name,
                 signature=signature,
                 input_example=input_example,
+                serialization_format="cloudpickle",
             )
             print(f"Model successfully logged and registered as '{registered_model_name}'")
         except Exception as e:
@@ -168,6 +169,7 @@ def train_and_register(
                 artifact_path="fraud_model",
                 signature=signature,
                 input_example=input_example,
+                serialization_format="cloudpickle",
             )
 
     # 6. Save Local Fallback Model Artifact

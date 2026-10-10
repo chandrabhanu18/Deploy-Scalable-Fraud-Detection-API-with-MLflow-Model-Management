@@ -46,6 +46,7 @@ services:
       mlflow server
       --backend-store-uri postgresql://${POSTGRES_USER:-mlflow_user}:${POSTGRES_PASSWORD:-mlflow_password}@db:5432/${POSTGRES_DB:-mlflow_db}
       --default-artifact-root /mlruns
+      --serve-artifacts
       --host 0.0.0.0
       --port 5000
       --allowed-hosts "*"
@@ -71,7 +72,7 @@ services:
       mlflow:
         condition: service_healthy
     ports:
-      - "${APP_PORT:-8002}:8000"
+      - "${APP_PORT:-8000}:8000"
     environment:
       APP_NAME: "Fraud Detection API"
       APP_ENV: "production"
@@ -83,8 +84,8 @@ services:
       MODEL_FALLBACK_PATH: "data/fraud_model.pkl"
       FRAUD_PROBABILITY_THRESHOLD: 0.50
     volumes:
-      - mlflow_artifacts:/mlruns:ro
-      - ./data:/app/data:ro
+      - mlflow_artifacts:/mlruns
+      - ./data:/app/data
     networks:
       - fraud_net
     healthcheck:
