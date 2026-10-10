@@ -1,0 +1,105 @@
+services:
+  # ============================================================================
+  # 1. PostgreSQL Database for MLflow Tracking & Model Registry Metadata
+  # ============================================================================
+  db:
+    image: postgres:15-alpine
+    container_name: fraud_detection_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mlflow_db}
+      POSTGRES_USER: ${POSTGRES_USER:-mlflow_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlflow_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    networks:
+      - fraud_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mlflow_user} -d ${POSTGRES_DB:-mlflow_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ============================================================================
+  # 2. MLflow Tracking Server & Model Registry
+  # ============================================================================
+  mlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
+    container_name: fraud_detection_mlflow
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BACKEND_STORE_URI: postgresql://${POSTGRES_USER:-mlflow_user}:${POSTGRES_PASSWORD:-mlflow_password}@db:5432/${POSTGRES_DB:-mlflow_db}
+      DEFAULT_ARTIFACT_ROOT: /mlruns
+    volumes:
+      - mlflow_artifacts:/mlruns
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://${POSTGRES_USER:-mlflow_user}:${POSTGRES_PASSWORD:-mlflow_password}@db:5432/${POSTGRES_DB:-mlflow_db}
+      --default-artifact-root /mlruns
+      --host 0.0.0.0
+      --port 5000
+      --allowed-hosts "*"
+    networks:
+      - fraud_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ============================================================================
+  # 3. Fraud Detection FastAPI Inference Service
+  # ============================================================================
+  fraud-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fraud_detection_api
+    restart: unless-stopped
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8002}:8000"
+    environment:
+      APP_NAME: "Fraud Detection API"
+      APP_ENV: "production"
+      LOG_LEVEL: "INFO"
+      STRUCTURED_LOGGING: "true"
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      MODEL_NAME: "FraudDetectionModel"
+      MODEL_VERSION: "1"
+      MODEL_FALLBACK_PATH: "data/fraud_model.pkl"
+      FRAUD_PROBABILITY_THRESHOLD: 0.50
+    volumes:
+      - mlflow_artifacts:/mlruns:ro
+      - ./data:/app/data:ro
+    networks:
+      - fraud_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres_data:
+    driver: local
+  mlflow_artifacts:
+    driver: local
+
+networks:
+  fraud_net:
+    driver: bridge
